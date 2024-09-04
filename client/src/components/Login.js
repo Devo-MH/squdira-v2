@@ -1,46 +1,48 @@
 import React, { useState, useContext } from 'react';
-import AuthContext from '../context/AuthContext';
-import AuthService from '../services/AuthService';
 import { useNavigate } from 'react-router-dom';
+import AuthContext from '../context/AuthContext';
 
-const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+const WalletConnect = () => {
+  const [errorMessage, setErrorMessage] = useState('');
   const { setIsAuthenticated } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await AuthService.login(email, password);
-      setIsAuthenticated(true);
-      navigate('/');
-    } catch (err) {
-      console.error('Login failed', err);
+  const connectWallet = async () => {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const walletAddress = accounts[0];
+
+        const response = await fetch('/api/auth/wallet-login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ walletAddress }),
+        });
+
+        const data = await response.json();
+        if (data.token) {
+          localStorage.setItem('authToken', data.token);
+          setIsAuthenticated(true);  // Update authentication status
+          navigate('/');  // Redirect to dashboard
+        } else {
+          setErrorMessage('Login failed');
+        }
+      } catch (error) {
+        setErrorMessage('Wallet connection failed');
+      }
+    } else {
+      setErrorMessage('Please install MetaMask to connect your wallet');
     }
   };
 
   return (
-    <form onSubmit={onSubmit}>
-      <input
-        type="email"
-        name="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email"
-        required
-      />
-      <input
-        type="password"
-        name="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Password"
-        required
-      />
-      <button type="submit">Login</button>
-    </form>
+    <div className="login-container">
+      <button onClick={connectWallet}>Connect Wallet</button>
+      {errorMessage && <p style={{ color: 'red' }}>{errorMessage}</p>}
+    </div>
   );
 };
 
-export default Login;
+export default WalletConnect;

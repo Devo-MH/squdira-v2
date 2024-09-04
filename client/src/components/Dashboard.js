@@ -1,12 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AuthContext from '../context/AuthContext';
 
 const Dashboard = () => {
+  const { isAuthenticated } = useContext(AuthContext);  // Use AuthContext to check authentication status
   const [walletAddress, setWalletAddress] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');  // Redirect if not authenticated
+      return;
+    }
+
     const fetchUserData = async () => {
       try {
         const token = localStorage.getItem('authToken');
@@ -24,8 +31,7 @@ const Dashboard = () => {
 
         if (!response.ok) {
           if (response.status === 401) {
-            // Token might be expired or invalid, navigate to login
-            localStorage.removeItem('authToken'); // Clear the expired token
+            localStorage.removeItem('authToken');
             navigate('/login');
           }
           throw new Error(`HTTP error! Status: ${response.status}`);
@@ -44,7 +50,7 @@ const Dashboard = () => {
     };
 
     fetchUserData();
-  }, [navigate]);
+  }, [isAuthenticated, navigate]);
 
   return (
     <div className="dashboard-container">
@@ -57,13 +63,6 @@ const Dashboard = () => {
             {walletAddress || 'Loading...'}
           </div>
         )}
-        <button
-          className="copy-button mt-2 bg-blue-500 text-white py-1 px-2 rounded"
-          onClick={() => navigator.clipboard.writeText(walletAddress)}
-          disabled={!walletAddress} // Disable button if walletAddress is not loaded yet
-        >
-          Copy to Clipboard
-        </button>
       </div>
     </div>
   );

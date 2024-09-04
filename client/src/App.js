@@ -1,7 +1,7 @@
 import React, { useContext, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
-import AuthContext from './context/AuthContext';
-import AuthService from './services/AuthService';
+import AuthContext from './context/AuthContext';  // Import AuthContext
+import AuthService from './services/AuthService';  // Import AuthService
 import Dashboard from './components/Dashboard';
 import Login from './components/Login';
 import WalletConnect from './components/WalletConnect';
@@ -12,13 +12,15 @@ function App() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      try {
-        const response = await AuthService.checkAuth();
-        setIsAuthenticated(response.data);
-      } catch (err) {
+      const token = await AuthService.getAccessToken();  // Get a valid token
+
+      if (token) {
+        setIsAuthenticated(true);
+      } else {
         setIsAuthenticated(false);
       }
     };
+
     checkAuth();
   }, [setIsAuthenticated]);
 
@@ -28,20 +30,10 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route
           path="/"
-          element={
-            isAuthenticated ? <Dashboard /> : <Navigate to="/login" />
-          }
+          element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />}
         />
-        <Route
-          path="/wallet-connect"
-          element={<WalletConnect />}
-        />
-        <Route
-          path="/games"
-          element={
-            isAuthenticated ? <GameDiscoveryPage /> : <Navigate to="/login" />
-          }
-        />
+        <Route path="/wallet-connect" element={<WalletConnect />} />
+        <Route path="/games" element={isAuthenticated ? <GameDiscoveryPage /> : <Navigate to="/login" />} />
       </Routes>
     </Router>
   );

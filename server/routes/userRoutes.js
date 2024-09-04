@@ -4,6 +4,24 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const authMiddleware = require('../middleware/authMiddleware');
 
+// Generate Access Token (short-lived)
+const generateAccessToken = (user) => {
+  return jwt.sign(
+    { id: user._id, walletAddress: user.walletAddress },
+    process.env.JWT_SECRET,
+    { expiresIn: '1h' }  // Short-lived access token
+  );
+};
+
+// Generate Refresh Token (long-lived)
+const generateRefreshToken = (user) => {
+  return jwt.sign(
+    { id: user._id, walletAddress: user.walletAddress },
+    process.env.REFRESH_TOKEN_SECRET,
+    { expiresIn: '7d' }  // Long-lived refresh token (7 days)
+  );
+};
+
 // Wallet login route
 router.post('/wallet-login', async (req, res) => {
   const { walletAddress } = req.body;
@@ -15,109 +33,83 @@ router.post('/wallet-login', async (req, res) => {
   try {
     let user = await User.findOne({ walletAddress });
 
+    // If the user doesn't exist, create a new one
     if (!user) {
-      // Generate a unique username and email based on the wallet address
-      let generatedUsername = `user_${walletAddress.slice(-6)}`;
-      let generatedEmail = `${generatedUsername}@example.com`;
-
-      // Ensure the generated username is unique
-      while (await User.findOne({ username: generatedUsername })) {
-        generatedUsername = `user_${walletAddress.slice(-6)}_${Date.now()}`;
-      }
-
-      // Ensure the generated email is unique
-      while (await User.findOne({ email: generatedEmail })) {
-        generatedEmail = `${generatedUsername}_${Date.now()}@example.com`;
-      }
-
       user = new User({
         walletAddress,
-        username: generatedUsername,
-        email: generatedEmail, // Assign a unique email
+        username: `user_${walletAddress.slice(-6)}`,
+        email: `user_${walletAddress.slice(-6)}@example.com`,
       });
-
       await user.save();
     }
 
-    const token = jwt.sign(
-      { id: user._id, walletAddress: user.walletAddress },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
+    // Generate tokens
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
 
-    res.json({ token, message: 'Login successful', walletAddress: user.walletAddress });
+    // Store the refresh token in an HTTP-only cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,  // Secure cookie
+      secure: process.env.NODE_ENV === 'production',  // Use HTTPS in production
+      sameSite: 'strict',  // Prevent CSRF attacks
+    });
+
+    res.json({
+      accessToken,
+      message: 'Login successful',
+      walletAddress: user.walletAddress,
+    });
   } catch (error) {
     console.error('Error during wallet login:', error.message);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-// Protected route to get user profile
+// Refresh token route
+router.post('/refresh-token', (req, res) => {
+  const refreshToken = req.cookies.refreshToken;  // Extract refresh token from the cookie
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'No refresh token provided' });
+  }
+
+  try {
+    // Verify the refresh token
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    const user = { id: decoded.id, walletAddress: decoded.walletAddress };
+
+    // Issue a new access token
+    const accessToken = generateAccessToken(user);
+
+    res.json({ accessToken });
+  } catch (error) {
+    console.error('Error verifying refresh token:', error.message);
+    return res.status(403).json({ message: 'Invalid refresh token' });
+  }
+});
+
+router.get('/user-data', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (err) {
+    console.error('Error fetching user data:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+// Example protected route for profile
 router.get('/profile', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findOne({ walletAddress: req.user.walletAddress });
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    res.json({ walletAddress: user.walletAddress, profilePicture: user.profilePicture, bio: user.bio });
+    const user = await User.findById(req.user.id).select('-password');
+    res.json(user);
   } catch (error) {
-    console.error('Error fetching user profile:', error.message);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-// Manage Connected Wallets
-router.post('/wallet', authMiddleware, async (req, res) => {
-  const { walletAddress } = req.body;
-  const userId = req.user.id;
-
-  try {
-    let user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    if (walletAddress && typeof walletAddress === 'string' && walletAddress.trim()) {
-      if (!user.connectedWallets.includes(walletAddress)) {
-        user.connectedWallets.push(walletAddress);
-        await user.save();
-        console.log('Wallet added:', walletAddress);
-        res.status(200).json({ message: 'Wallet added successfully', connectedWallets: user.connectedWallets });
-      } else {
-        console.log('Wallet already exists:', walletAddress);
-        res.status(200).json({ message: 'Wallet already connected', connectedWallets: user.connectedWallets });
-      }
-    } else {
-      console.log('Invalid wallet address:', walletAddress);
-      return res.status(400).json({ message: 'Invalid wallet address' });
-    }
-  } catch (error) {
-    console.error('Error adding wallet:', error.message);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-// Route to remove a connected wallet
-router.delete('/wallet/:walletAddress', authMiddleware, async (req, res) => {
-  const userId = req.user.id;
-  const { walletAddress } = req.params;
-
-  try {
-    let user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    user.connectedWallets = user.connectedWallets.filter(wallet => wallet !== walletAddress);
-    await user.save();
-
-    console.log('Wallet removed:', walletAddress);
-    res.status(200).json({ message: 'Wallet removed successfully', connectedWallets: user.connectedWallets });
-  } catch (error) {
-    console.error('Error removing wallet:', error.message);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error(error.message);
+    res.status(500).send('Server error');
   }
 });
 
