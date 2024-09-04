@@ -1,0 +1,5 @@
+{
+    "jwtSecret": "your_jwt_secret_key",
+    "mongoURI": "mongodb+srv://dinabahnasy:kJMJLhiOcmdjuzeH@cluster0.ucfbz.mongodb.net/squdira_db?retryWrites=true&w=majority&appName=Cluster0"
+  }
+  
