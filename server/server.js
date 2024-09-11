@@ -3,29 +3,31 @@ const express = require('express');
 const connectDB = require('./config/db');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const cookieParser = require('cookie-parser'); // Import cookie parser
+const cookieParser = require('cookie-parser');  // For refresh token cookies
 
 const app = express();
 
-// Connect to the database
+// Connect to MongoDB (ensure your MongoDB URI is correct in the .env file)
 connectDB();
 
-// Init middleware
-app.use(express.json());
-app.use(helmet());  // Adds various security-related HTTP headers
-app.use(morgan('tiny'));  // Logs HTTP requests
-app.use(cookieParser());  // Parses cookies for refresh tokens
+// Initialize middleware
+app.use(express.json());        // Parse JSON request bodies
+app.use(helmet());              // Adds security-related HTTP headers
+app.use(morgan('tiny'));        // Logs HTTP requests
+app.use(cookieParser());        // To handle cookies, especially refresh tokens
 
-// Define Routes
-app.use('/api/auth', require('./routes/api/auth'));  // Auth routes (including refresh-token)
-app.use('/api/web3games', require('./routes/api/web3Games'));  // Web3 Games routes
+// Define routes
+app.use('/api/auth', require('./routes/userRoutes'));  // Auth-related routes
 app.use('/api/users', require('./routes/userRoutes'));  // User management routes
 
-// Error Handling Middleware
+// Error-handling middleware (catches unhandled errors)
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ message: 'Server Error', error: err.message });
+  console.error(err.stack);
+  res.status(500).json({ message: 'Server Error', error: err.message });
 });
 
+// Start the server on port 5001 or a custom port defined in .env
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

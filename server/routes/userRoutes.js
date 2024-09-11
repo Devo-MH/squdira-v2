@@ -2,6 +2,12 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const Web3 = require('web3');
+
+// Initialize Web3 with a provider (Ganache or Infura RPC URL)
+const web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:7545'));
+
+// Middleware to protect routes
 const authMiddleware = require('../middleware/authMiddleware');
 
 // Generate Access Token (short-lived)
@@ -22,12 +28,28 @@ const generateRefreshToken = (user) => {
   );
 };
 
-// Wallet login route
+// Wallet login route with proper validation
 router.post('/wallet-login', async (req, res) => {
   const { walletAddress } = req.body;
 
-  if (!walletAddress) {
-    return res.status(400).json({ message: 'Wallet address is required' });
+  // Log the received wallet address for debugging
+  console.log('Received wallet address:', walletAddress);
+
+  // Validate wallet address using web3.js and a fallback regex check
+  const isValidWeb3 = web3.utils.isAddress(walletAddress);  // Web3.js validation
+  const isValidRegex = /^0x[a-fA-F0-9]{40}$/.test(walletAddress);  // Fallback regex validation
+
+  const isValid = isValidWeb3 || isValidRegex;  // Consider address valid if either validation passes
+
+  // Log validation results
+  console.log('Web3.js validation result:', isValidWeb3);
+  console.log('Regex validation result:', isValidRegex);
+  console.log('Final validation result:', isValid);
+
+  // If wallet address is invalid
+  if (!walletAddress || !isValid) {
+    console.log('Invalid wallet address');
+    return res.status(400).json({ message: 'Invalid wallet address' });
   }
 
   try {
@@ -88,6 +110,18 @@ router.post('/refresh-token', (req, res) => {
   }
 });
 
+// Example protected route for user profile
+router.get('/profile', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    res.json(user);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// Another example of a protected route for fetching user data
 router.get('/user-data', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -98,18 +132,6 @@ router.get('/user-data', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Error fetching user data:', err.message);
     res.status(500).json({ message: 'Server error' });
-  }
-});
-
-
-// Example protected route for profile
-router.get('/profile', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('-password');
-    res.json(user);
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).send('Server error');
   }
 });
 
