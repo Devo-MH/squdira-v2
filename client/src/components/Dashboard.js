@@ -1,68 +1,80 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AuthService from '../services/AuthService';
+import CardDisplay from './CardDisplay'; // Import the CardDisplay component
 import AuthContext from '../context/AuthContext';
 
 const Dashboard = () => {
-  const { isAuthenticated } = useContext(AuthContext);  // Use AuthContext to check authentication status
-  const [walletAddress, setWalletAddress] = useState('');
-  const [error, setError] = useState('');
+  const [userData, setUserData] = useState({});
+  const [cards, setCards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { isAuthenticated } = useContext(AuthContext);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/login');  // Redirect if not authenticated
-      return;
-    }
+    const fetchData = async () => {
+      // Ensure the user is authenticated
+      if (!isAuthenticated) {
+        navigate('/wallet-connect');
+        return;
+      }
 
-    const fetchUserData = async () => {
+      // Fetch user data (wallet address, etc.)
+      const token = await AuthService.getAccessToken();
+      if (!token) {
+        navigate('/wallet-connect');
+        return;
+      }
+
       try {
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-          throw new Error('No token found');
-        }
-
-        const response = await fetch('/api/users/user-data', {
+        // Fetch user data
+        const userResponse = await fetch('/api/users/user-data', {
           method: 'GET',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
+            'Authorization': `Bearer ${token}`, // Send the token in the header
           },
         });
+        const userData = await userResponse.json();
+        setUserData(userData);
 
-        if (!response.ok) {
-          if (response.status === 401) {
-            localStorage.removeItem('authToken');
-            navigate('/login');
-          }
-          throw new Error(`HTTP error! Status: ${response.status}`);
+        // Fetch Gods Unchained cards using relative path
+        const cardResponse = await fetch('/api/games/gods-unchained');  // Use relative path
+        if (!cardResponse.ok) {
+          throw new Error('Failed to fetch cards');
         }
-
-        const data = await response.json();
-        setWalletAddress(data.walletAddress);
+        const cardData = await cardResponse.json();
+        setCards(cardData);
       } catch (error) {
-        console.error('Error fetching user data:', error);
-        if (error.message === 'No token found') {
-          navigate('/login');
-        } else {
-          setError('Failed to load user data.');
-        }
+        console.error('Error fetching data:', error);
+        setError(error.message);
+        navigate('/wallet-connect');
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchUserData();
+    fetchData();
   }, [isAuthenticated, navigate]);
+
+  if (loading) {
+    return <div className="text-center mt-8">Loading data...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center mt-8 text-red-500">{error}</div>;
+  }
 
   return (
     <div className="dashboard-container">
-      <div className="user-info-section bg-gray-800 p-4 rounded-lg shadow-md">
-        <h2 className="text-white text-xl mb-4">Your Wallet</h2>
-        {error ? (
-          <div className="error-message text-red-500">{error}</div>
-        ) : (
-          <div className="wallet-address bg-gray-700 p-2 rounded-md text-white">
-            {walletAddress || 'Loading...'}
-          </div>
-        )}
+      <h1>Your Wallet</h1>
+      <div>{userData.walletAddress || 'No wallet address found'}</div>
+
+      <h2 className="mt-8">Gods Unchained Cards</h2>
+      <div className="cards-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+        {cards.map((card) => (
+          <CardDisplay key={card.id} card={card} /> // Use CardDisplay to show the cards
+        ))}
       </div>
     </div>
   );

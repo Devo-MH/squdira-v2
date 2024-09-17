@@ -1,16 +1,17 @@
 import axios from 'axios';
-import { getToken } from './AuthService';
+import AuthService from './AuthService';
 
 export const getUserData = async () => {
   try {
-    const token = getToken();
-    const response = await axios.get('/api/users', {
+    const token = await AuthService.getAccessToken();
+    const response = await axios.get('/api/users/user-data', {
       headers: {
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
     });
     return response.data;
   } catch (error) {
+    console.error('Error fetching user data:', error);
     throw new Error('Failed to fetch user data');
   }
 };

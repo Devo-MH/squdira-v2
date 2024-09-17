@@ -1,14 +1,13 @@
-const express = require('express');
+import express from 'express';
+import jwt from 'jsonwebtoken';
+import Web3 from 'web3';
+import User from '../models/User.js';
+import authMiddleware from '../middleware/authMiddleware.js';
+
 const router = express.Router();
-const User = require('../models/User');
-const jwt = require('jsonwebtoken');
-const Web3 = require('web3');
 
 // Initialize Web3 with a provider (Ganache or Infura RPC URL)
 const web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:7545'));
-
-// Middleware to protect routes
-const authMiddleware = require('../middleware/authMiddleware');
 
 // Generate Access Token (short-lived)
 const generateAccessToken = (user) => {
@@ -32,30 +31,20 @@ const generateRefreshToken = (user) => {
 router.post('/wallet-login', async (req, res) => {
   const { walletAddress } = req.body;
 
-  // Log the received wallet address for debugging
   console.log('Received wallet address:', walletAddress);
 
   // Validate wallet address using web3.js and a fallback regex check
-  const isValidWeb3 = web3.utils.isAddress(walletAddress);  // Web3.js validation
-  const isValidRegex = /^0x[a-fA-F0-9]{40}$/.test(walletAddress);  // Fallback regex validation
+  const isValidWeb3 = web3.utils.isAddress(walletAddress);
+  const isValidRegex = /^0x[a-fA-F0-9]{40}$/.test(walletAddress);
+  const isValid = isValidWeb3 || isValidRegex;
 
-  const isValid = isValidWeb3 || isValidRegex;  // Consider address valid if either validation passes
-
-  // Log validation results
-  console.log('Web3.js validation result:', isValidWeb3);
-  console.log('Regex validation result:', isValidRegex);
-  console.log('Final validation result:', isValid);
-
-  // If wallet address is invalid
   if (!walletAddress || !isValid) {
-    console.log('Invalid wallet address');
     return res.status(400).json({ message: 'Invalid wallet address' });
   }
 
   try {
     let user = await User.findOne({ walletAddress });
 
-    // If the user doesn't exist, create a new one
     if (!user) {
       user = new User({
         walletAddress,
@@ -65,15 +54,13 @@ router.post('/wallet-login', async (req, res) => {
       await user.save();
     }
 
-    // Generate tokens
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
-    // Store the refresh token in an HTTP-only cookie
     res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,  // Secure cookie
-      secure: process.env.NODE_ENV === 'production',  // Use HTTPS in production
-      sameSite: 'strict',  // Prevent CSRF attacks
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
     });
 
     res.json({
@@ -89,23 +76,19 @@ router.post('/wallet-login', async (req, res) => {
 
 // Refresh token route
 router.post('/refresh-token', (req, res) => {
-  const refreshToken = req.cookies.refreshToken;  // Extract refresh token from the cookie
+  const refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) {
     return res.status(401).json({ message: 'No refresh token provided' });
   }
 
   try {
-    // Verify the refresh token
     const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
     const user = { id: decoded.id, walletAddress: decoded.walletAddress };
 
-    // Issue a new access token
     const accessToken = generateAccessToken(user);
-
     res.json({ accessToken });
   } catch (error) {
-    console.error('Error verifying refresh token:', error.message);
     return res.status(403).json({ message: 'Invalid refresh token' });
   }
 });
@@ -116,12 +99,11 @@ router.get('/profile', authMiddleware, async (req, res) => {
     const user = await User.findById(req.user.id).select('-password');
     res.json(user);
   } catch (error) {
-    console.error(error.message);
     res.status(500).send('Server error');
   }
 });
 
-// Another example of a protected route for fetching user data
+// Fetch user data
 router.get('/user-data', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -130,9 +112,8 @@ router.get('/user-data', authMiddleware, async (req, res) => {
     }
     res.json(user);
   } catch (err) {
-    console.error('Error fetching user data:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-module.exports = router;
+export default router;  // Use export default for ES modules

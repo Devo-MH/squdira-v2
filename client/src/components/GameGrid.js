@@ -2,16 +2,22 @@ import React from 'react';
 import GameCard from './GameCard';
 
 const GameGrid = ({ games }) => {
+  if (!games || games.length === 0) {
+    return (
+      <div className="text-center text-gray-500">
+        No games available at the moment.
+      </div>
+    );
+  }
+
   return (
-    <div className="w-3/4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+    <div className="game-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
       {games.map((game) => (
         <GameCard
           key={game.id}
-          thumbnail={game.thumbnail}
-          title={game.title}
+          thumbnail={game.image}
+          title={game.name}
           description={game.description}
-          gameUrl={game.gameUrl}
-          genre={game.genre}
         />
       ))}
     </div>

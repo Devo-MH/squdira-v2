@@ -1,66 +1,62 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { BrowserProvider } from 'ethers';  // Correctly import BrowserProvider from ethers.js
+import React, { useState, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AuthContext from '../context/AuthContext';
 
-const WalletConnect = ({ onAuthenticated }) => {
-  const [walletAddress, setWalletAddress] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const { setIsAuthenticated } = useContext(AuthContext);
-
-  useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setWalletAddress('0x...');  // Replace with logic to fetch the actual address
-      if (onAuthenticated) {
-        onAuthenticated();
-      }
-    }
-  }, [onAuthenticated]);
+const WalletConnect = () => {
+  const [errorMessage, setErrorMessage] = useState('');  // To show any error messages
+  const [isConnecting, setIsConnecting] = useState(false);  // Disable button during connection
+  const { setIsAuthenticated } = useContext(AuthContext);  // Get the context to set authentication status
+  const navigate = useNavigate();  // For navigation after successful login
 
   const connectWallet = async () => {
     if (window.ethereum) {
-      try {
-        // Create provider with ethers.js
-        const provider = new BrowserProvider(window.ethereum);
-        await provider.send('eth_requestAccounts', []);  // Request accounts
-        const signer = await provider.getSigner();
-        const address = await signer.getAddress();
-        setWalletAddress(address);
-        setErrorMessage('');
+      setIsConnecting(true);  // Disable button while connecting
 
-        // Send the wallet address to the backend for authentication
+      try {
+        // Request user's MetaMask accounts
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const walletAddress = accounts[0];  // Get the first account
+
+        // Send the wallet address to the backend for login/authentication
         const response = await fetch('/api/auth/wallet-login', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ walletAddress: address }),
+          body: JSON.stringify({ walletAddress }),
         });
 
         const data = await response.json();
-        if (data.token) {
-          // Store the JWT token in localStorage
-          localStorage.setItem('authToken', data.token);
-          setIsAuthenticated(true);  // Set authenticated state
-          if (onAuthenticated) {
-            onAuthenticated();
-          }
+        console.log('API Response:', data);  // Log the API response for debugging
+
+        // Check if the response includes an access token
+        if (data.accessToken) {
+          localStorage.setItem('authToken', data.accessToken);  // Store token in localStorage
+          console.log('Stored Token:', localStorage.getItem('authToken'));  // Log stored token
+          setIsAuthenticated(true);  // Set authentication status in context
+          navigate('/');  // Redirect to dashboard
         } else {
-          setErrorMessage(data.message);
+          setErrorMessage(data.message || 'Login failed');  // Show error message from API or default message
         }
       } catch (error) {
-        setErrorMessage('Failed to connect wallet');
-        console.error(error);
+        console.error('Error during wallet connection:', error);  // Log any connection errors
+        setErrorMessage('Wallet connection failed');  // Set generic error message
       }
+
+      setIsConnecting(false);  // Re-enable button after the connection attempt
     } else {
-      setErrorMessage('MetaMask is not installed. Please install it to use this feature.');
+      setErrorMessage('Please install MetaMask to connect your wallet');  // MetaMask not found
     }
   };
 
   return (
-    <div>
-      {walletAddress ? <p>Connected: {walletAddress}</p> : <button onClick={connectWallet}>Connect Wallet</button>}
-      {errorMessage && <p style={{ color: 'red' }}>{errorMessage}</p>}
+    <div className="login-container">
+      <h1>Connect Your Wallet</h1>
+      {/* Button to initiate wallet connection */}
+      <button onClick={connectWallet} disabled={isConnecting}>  {/* Disable button while connecting */}
+        {isConnecting ? 'Connecting...' : 'Connect Wallet'}  {/* Show loading state */}
+      </button>
+      {errorMessage && <p className="text-red-500">{errorMessage}</p>}  {/* Show error message if any */}
     </div>
   );
 };
