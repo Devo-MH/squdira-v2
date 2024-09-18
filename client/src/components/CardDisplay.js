@@ -1,9 +1,10 @@
-import React from 'react'; // Import React
+// src/components/CardDisplay.js
+import React from 'react';
+import PropTypes from 'prop-types';
 
-// This functional component receives a 'card' prop and displays its details
 const CardDisplay = ({ card }) => {
-  const defaultImage = '/images/default-card-image.jpg';  // Make sure you have this image in your public folder
-  const cardImage = card.image || defaultImage;  // Use card image or fallback to default image
+  const defaultImage = '/images/default-card-image.jpg';
+  const cardImage = card.image || defaultImage;
 
   return (
     <div className="card p-4 border rounded-lg shadow-lg transition-transform transform hover:scale-105">
@@ -11,12 +12,23 @@ const CardDisplay = ({ card }) => {
         src={cardImage}
         alt={card.name}
         className="w-full h-64 object-cover rounded-lg"
-        onError={(e) => { e.target.src = defaultImage; }}  // Fallback for broken images
+        onError={(e) => {
+          e.target.onerror = null;
+          e.target.src = defaultImage;
+        }}
       />
       <h2 className="text-xl font-semibold mt-4">{card.name}</h2>
       <p className="text-gray-600">{card.description || 'No description available'}</p>
     </div>
   );
+};
+
+CardDisplay.propTypes = {
+  card: PropTypes.shape({
+    image: PropTypes.string,
+    name: PropTypes.string.isRequired,
+    description: PropTypes.string,
+  }).isRequired,
 };
 
 export default CardDisplay;

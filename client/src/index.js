@@ -1,17 +1,14 @@
+// src/index.js
 import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './index.css';
+import { createRoot } from 'react-dom/client';
+import { AuthProvider } from './context/AuthContext';
 import App from './App';
-import reportWebVitals from './reportWebVitals';
-import { AuthProvider } from './context/AuthContext';  // Import AuthProvider
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
+const container = document.getElementById('root');
+const root = createRoot(container);
+
 root.render(
-  <React.StrictMode>
-    <AuthProvider>  {/* Wrap App with AuthProvider */}
-      <App />
-    </AuthProvider>
-  </React.StrictMode>
+  <AuthProvider>
+    <App />
+  </AuthProvider>
 );
-
-reportWebVitals();

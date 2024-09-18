@@ -1,62 +1,69 @@
-import React, { useState, useContext } from 'react';
+import React, { useContext } from 'react';
+import { BrowserProvider } from 'ethers';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import AuthContext from '../context/AuthContext';
+import { AuthContext } from '../context/AuthContext';
 
 const WalletConnect = () => {
-  const [errorMessage, setErrorMessage] = useState('');  // To show any error messages
-  const [isConnecting, setIsConnecting] = useState(false);  // Disable button during connection
-  const { setIsAuthenticated } = useContext(AuthContext);  // Get the context to set authentication status
-  const navigate = useNavigate();  // For navigation after successful login
+  const { login } = useContext(AuthContext); // Using AuthContext to manage authentication state
+  const navigate = useNavigate(); // For navigation post login
 
-  const connectWallet = async () => {
-    if (window.ethereum) {
-      setIsConnecting(true);  // Disable button while connecting
+  const handleWalletConnect = async () => {
+    if (!window.ethereum) {
+      alert('Please install MetaMask!');
+      return;
+    }
 
-      try {
-        // Request user's MetaMask accounts
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        const walletAddress = accounts[0];  // Get the first account
+    try {
+      // Request account access from MetaMask
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      
+      // Setup the provider and signer
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const walletAddress = await signer.getAddress(); // Get wallet address
 
-        // Send the wallet address to the backend for login/authentication
-        const response = await fetch('/api/auth/wallet-login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ walletAddress }),
-        });
+      // Sign the message for authentication
+      const message = 'Sign this message to authenticate with Squdira.';
+      const signature = await signer.signMessage(message); // User signs the message
 
-        const data = await response.json();
-        console.log('API Response:', data);  // Log the API response for debugging
+      // Send the wallet address and signature to the backend for authentication
+      const response = await axios.post(
+        'http://localhost:5001/api/auth/wallet-login', // Adjust this URL for production
+        { walletAddress, signature },
+        { withCredentials: true } // Include cookies in the request for secure sessions
+      );
 
-        // Check if the response includes an access token
-        if (data.accessToken) {
-          localStorage.setItem('authToken', data.accessToken);  // Store token in localStorage
-          console.log('Stored Token:', localStorage.getItem('authToken'));  // Log stored token
-          setIsAuthenticated(true);  // Set authentication status in context
-          navigate('/');  // Redirect to dashboard
-        } else {
-          setErrorMessage(data.message || 'Login failed');  // Show error message from API or default message
-        }
-      } catch (error) {
-        console.error('Error during wallet connection:', error);  // Log any connection errors
-        setErrorMessage('Wallet connection failed');  // Set generic error message
+      // Destructure and store the access token received from the backend
+      const { accessToken } = response.data;
+      localStorage.setItem('accessToken', accessToken); // Store access token in localStorage
+
+      // Update the authentication context and redirect the user
+      login(accessToken);
+      navigate('/'); // Navigate to home or the desired page after login
+
+    } catch (error) {
+      // Error handling based on the type of error
+      if (error.response) {
+        // Server responded with a status other than 2xx
+        console.error('Server Error:', error.response.data);
+        alert(`Failed to connect wallet: ${error.response.data.message}`);
+      } else if (error.request) {
+        // Request was made, but no response received
+        console.error('No response received:', error.request);
+        alert('No response from the server. Please try again.');
+      } else {
+        // Some other error occurred
+        console.error('Error:', error.message);
+        alert('An unexpected error occurred. Please try again.');
       }
-
-      setIsConnecting(false);  // Re-enable button after the connection attempt
-    } else {
-      setErrorMessage('Please install MetaMask to connect your wallet');  // MetaMask not found
     }
   };
 
   return (
-    <div className="login-container">
+    <div>
       <h1>Connect Your Wallet</h1>
-      {/* Button to initiate wallet connection */}
-      <button onClick={connectWallet} disabled={isConnecting}>  {/* Disable button while connecting */}
-        {isConnecting ? 'Connecting...' : 'Connect Wallet'}  {/* Show loading state */}
-      </button>
-      {errorMessage && <p className="text-red-500">{errorMessage}</p>}  {/* Show error message if any */}
+      <button onClick={handleWalletConnect}>Connect Wallet</button>
     </div>
   );
 };
